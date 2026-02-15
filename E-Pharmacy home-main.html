@@ -1,0 +1,2295 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Pharmacy Store</title>
+  <style>
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    .medicine-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .medicine-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    .btn-primary {
+      transition: all 0.2s;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .cart-badge {
+      animation: pulse 0.3s ease-in-out;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    .loading-spinner {
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .stat-card {
+      transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-4px);
+    }
+    
+    .activity-item {
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .medicine-image {
+      width: 100%;
+      height: 200px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+
+    .medicine-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 12px;
+    }
+
+    /* Utility Classes */
+    .min-h-screen { min-height: 100vh; }
+    .w-full { width: 100%; }
+    .max-w-7xl { max-width: 80rem; margin: 0 auto; }
+    .max-w-4xl { max-width: 56rem; margin: 0 auto; }
+    .max-w-md { max-width: 28rem; }
+    .flex { display: flex; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-3 { gap: 12px; }
+    .gap-4 { gap: 16px; }
+    .gap-6 { gap: 24px; }
+    .p-4 { padding: 16px; }
+    .p-6 { padding: 24px; }
+    .p-8 { padding: 32px; }
+    .mb-4 { margin-bottom: 16px; }
+    .mb-6 { margin-bottom: 24px; }
+    .mb-8 { margin-bottom: 32px; }
+    .mt-4 { margin-top: 16px; }
+    .shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .shadow-xl { box-shadow: 0 20px 25px rgba(0,0,0,0.15); }
+    .rounded-xl { border-radius: 12px; }
+    .rounded-2xl { border-radius: 16px; }
+    .space-y-4 > * + * { margin-top: 16px; }
+    .hidden { display: none; }
+    .flex-1 { flex: 1; }
+    .flex-wrap { flex-wrap: wrap; }
+    .text-center { text-align: center; }
+    .overflow-x-auto { overflow-x: auto; }
+
+    /* Grid System */
+    .grid { display: grid; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    
+    @media (min-width: 768px) {
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    
+    @media (min-width: 1024px) {
+      .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="/_sdk/element_sdk.js" type="text/javascript"></script>
+  <script src="https://cdn.tailwindcss.com" type="text/javascript"></script>
+ </head>
+ <body class="min-h-screen">
+  <div id="app" class="w-full min-h-screen"></div>
+  <script>
+    // Simple localStorage-based data persistence
+    const storage = {
+      data: [],
+      listeners: [],
+      
+      init() {
+        const saved = localStorage.getItem('pharmacy_data');
+        this.data = saved ? JSON.parse(saved) : [];
+      },
+      
+      subscribe(callback) {
+        this.listeners.push(callback);
+      },
+      
+      notify() {
+        this.listeners.forEach(cb => cb(this.data));
+        localStorage.setItem('pharmacy_data', JSON.stringify(this.data));
+      },
+      
+      create(item) {
+        item.__backendId = `${Date.now()}_${Math.random()}`;
+        this.data.push(item);
+        this.notify();
+        return { isOk: true };
+      },
+      
+      update(item) {
+        const index = this.data.findIndex(d => d.__backendId === item.__backendId);
+        if (index !== -1) {
+          this.data[index] = item;
+          this.notify();
+          return { isOk: true };
+        }
+        return { isOk: false };
+      },
+      
+      delete(item) {
+        this.data = this.data.filter(d => d.__backendId !== item.__backendId);
+        this.notify();
+        return { isOk: true };
+      },
+      
+      getAll() {
+        return this.data;
+      }
+    };
+
+    let currentPage = 'login';
+    let currentUser = null;
+    let isAdmin = false;
+    let allData = [];
+    let loadingStates = {};
+    let refreshInterval;
+
+    // Rupee symbol function
+    function rupee(amount) {
+      return `Rs. ${amount.toFixed(2)}`;
+    }
+
+    const medicines = [
+      { id: '1', name: 'Paracetamol 500mg', manufacturer: 'PharmaCorp', category: 'pain-relief', mfgDate: '2023-01-15', expDate: '2028-01-15', price: 49, image: 'https://cf.shopee.ph/file/fa75cbe43e89aad1953d97f3a9ce5bbd' },
+      { id: '2', name: 'Amoxicillin 250mg', manufacturer: 'HealthGen', category: 'antibiotics', mfgDate: '2023-02-10', expDate: '2028-02-10', price: 105, image: 'https://5.imimg.com/data5/SELLER/Default/2024/2/389490211/KX/HR/YO/210488687/250-mg-amoxycillin-capsules-ip-1000x1000.jpg' },
+      { id: '3', name: 'Ibuprofen 400mg', manufacturer: 'MediLife', category: 'pain-relief', mfgDate: '2023-03-05', expDate: '2028-03-05', price: 69, image: 'https://www.assetpharmacy.com/wp-content/uploads/2022/10/Ibuprofen-400mg-Tablets-84-Tablets-2.jpg' },
+      { id: '4', name: 'Cetirizine 10mg', manufacturer: 'AllerCare', category: 'allergy', mfgDate: '2023-01-20', expDate: '2028-12-20', price: 55, image: 'https://i5.walmartimages.com/seo/Perrigo-Cetirizine-Hydrochloride-10mg-Antihistamine-Allergy-Laxative-30-Tablets_3fe06f55-d536-4c29-a458-5e0effe286b5.8b994cdd62f0776528ff4518cbffda15.jpeg' },
+      { id: '5', name: 'Omeprazole 20mg', manufacturer: 'GastroMed', category: 'chronic', mfgDate: '2023-02-15', expDate: '2028-02-15', price: 129, image: 'https://tse2.mm.bing.net/th/id/OIP.bLJc4_lpQslUo_bX2VY1cAHaHa?rs=1&pid=ImgDetMain&o=7&rm=3' },
+      { id: '6', name: 'Metformin 500mg', manufacturer: 'DiabeCare', category: 'chronic', mfgDate: '2023-03-01', expDate: '2028-03-01', price: 79, image: 'https://static.shop-apotheke.com/images/metformin-500-1a-pharma-filmtabletten-filmtabletten-D00113773-p15.jpg' },
+      { id: '7', name: 'Aspirin 75mg', manufacturer: 'CardioHealth', category: 'pain-relief', mfgDate: '2023-01-10', expDate: '2028-01-10', price: 39, image: 'https://www.chemist-4-u.com/media/catalog/product/cache/f82c79c06fdfbb9bff4567c21265baf6/a/s/aspirin-28.jpg' },
+      { id: '8', name: 'Losartan 50mg', manufacturer: 'BPControl', category: 'chronic', mfgDate: '2023-02-20', expDate: '2028-02-20', price: 115, image: 'https://tse1.mm.bing.net/th/id/OIP.0rtZB1v3i5zRJxCToE3ETgHaIB?rs=1&pid=ImgDetMain&o=7&rm=3' },
+      { id: '9', name: 'Atorvastatin 10mg', manufacturer: 'CholestMed', category: 'chronic', mfgDate: '2023-03-10', expDate: '2028-03-10', price: 155, image: 'https://nhathuocanphuoc.com.vn/upload/product/thuoc-atorvastatin-10mg-khapharco-hop-100-vien-5224.jpg' },
+      { id: '10', name: 'Levothyroxine 100mcg', manufacturer: 'ThyroCare', category: 'chronic', mfgDate: '2023-01-25', expDate: '2028-01-25', price: 95, image: 'https://tse1.mm.bing.net/th/id/OIP.y26RFdIPIjp23m3BLJQbpgHaJC?rs=1&pid=ImgDetMain&o=7&rm=3' }
+    ];
+
+    function initApp() {
+      storage.init();
+      storage.subscribe((data) => {
+        allData = data;
+        
+        if (currentPage === 'catalog') {
+          updateCartBadge();
+        } else if (currentPage === 'cart') {
+          renderCartPage();
+        } else if (currentPage === 'admin') {
+          renderAdminDashboardData();
+        }
+      });
+      
+      allData = storage.getAll();
+      
+      const savedUser = localStorage.getItem('pharmacy_user');
+      
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        isAdmin = currentUser.isAdmin;
+        
+        if (isAdmin) {
+          renderAdminDashboard();
+        } else {
+          renderCatalogPage();
+        }
+      } else {
+        renderLoginPage();
+      }
+    }
+
+    function renderLoginPage() {
+      currentPage = 'login';
+      const app = document.getElementById('app');
+      
+      app.style.background = '#f0f9ff';
+      
+      app.innerHTML = `
+        <div class="w-full min-h-screen flex items-center justify-center p-8">
+          <div class="w-full" style="max-width: 900px;">
+            <div class="text-center mb-8">
+              <div style="font-size: 48px; margin-bottom: 8px;">🏥</div>
+              <h1 style="font-size: 36px; font-weight: 700; color: #1e293b; margin-bottom: 8px;">MediCare Plus</h1>
+              <p style="font-size: 16px; color: #1e293b; opacity: 0.7;">Your Health, Our Priority</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- User Login -->
+              <div class="p-8 rounded-2xl shadow-xl" style="background: #ffffff; border: 3px solid #3b82f6;">
+                <div class="text-center mb-6">
+                  <div style="font-size: 48px; margin-bottom: 8px;">👤</div>
+                  <h2 style="font-size: 24px; font-weight: 700; color: #3b82f6; margin-bottom: 4px;">Customer Login</h2>
+                  <p style="font-size: 14px; color: #64748b;">Shop for medicines</p>
+                </div>
+                
+                <div id="userLoginError" style="display: none; padding: 12px; margin-bottom: 16px; background: #fee2e2; color: #991b1b; border-radius: 8px; font-size: 14px;"></div>
+                
+                <form id="userLoginForm" class="space-y-4">
+                  <div>
+                    <label for="userEmail" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Email Address</label>
+                    <input 
+                      type="email" 
+                      id="userEmail" 
+                      required 
+                      placeholder="Enter your email"
+                      style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label for="userPassword" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Password</label>
+                    <input 
+                      type="password" 
+                      id="userPassword" 
+                      required 
+                      placeholder="Enter your password"
+                      style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                    />
+                  </div>
+                  
+                  <button 
+                    type="submit" 
+                    id="userLoginButton"
+                    class="btn-primary"
+                    style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 24px; background: #3b82f6; color: #ffffff;"
+                  >
+                    Login as Customer
+                  </button>
+                </form>
+              </div>
+              
+              <!-- Admin Login -->
+              <div class="p-8 rounded-2xl shadow-xl" style="background: #ffffff; border: 3px solid #ef4444;">
+                <div class="text-center mb-6">
+                  <div style="font-size: 48px; margin-bottom: 8px;">👨‍💼</div>
+                  <h2 style="font-size: 24px; font-weight: 700; color: #ef4444; margin-bottom: 4px;">Admin Login</h2>
+                  <p style="font-size: 14px; color: #64748b;">Manage orders & users</p>
+                </div>
+                
+                <div id="adminLoginError" style="display: none; padding: 12px; margin-bottom: 16px; background: #fee2e2; color: #991b1b; border-radius: 8px; font-size: 14px;"></div>
+                
+                <form id="adminLoginForm" class="space-y-4">
+                  <div>
+                    <label for="adminEmail" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Admin Email</label>
+                    <input 
+                      type="email" 
+                      id="adminEmail" 
+                      required 
+                      placeholder="Enter admin email"
+                      style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label for="adminPassword" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Admin Password</label>
+                    <input 
+                      type="password" 
+                      id="adminPassword" 
+                      required 
+                      placeholder="Enter admin password"
+                      style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                    />
+                  </div>
+                  
+                  <button 
+                    type="submit" 
+                    id="adminLoginButton"
+                    class="btn-primary"
+                    style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 24px; background: #ef4444; color: #ffffff;"
+                  >
+                    Login as Admin
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('userLoginForm').addEventListener('submit', handleUserLogin);
+      document.getElementById('adminLoginForm').addEventListener('submit', handleAdminLogin);
+    }
+
+    async function handleUserLogin(e) {
+      e.preventDefault();
+      
+      const email = document.getElementById('userEmail').value;
+      const password = document.getElementById('userPassword').value;
+      const loginButton = document.getElementById('userLoginButton');
+      const errorDiv = document.getElementById('userLoginError');
+      
+      loginButton.disabled = true;
+      loginButton.innerHTML = '<span class="loading-spinner"></span>Logging in...';
+      errorDiv.style.display = 'none';
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (!email.includes('@') || password.length < 4) {
+        showLoginError('userLoginError', 'Please enter a valid email and password (minimum 4 characters).');
+        loginButton.disabled = false;
+        loginButton.innerHTML = 'Login as Customer';
+        return;
+      }
+      
+      const user = { email, isAdmin: false };
+      currentUser = user;
+      isAdmin = false;
+      localStorage.setItem('pharmacy_user', JSON.stringify(user));
+      
+      storage.create({
+        id: `activity_${Date.now()}_${Math.random()}`,
+        type: 'activity',
+        user_email: user.email,
+        data: JSON.stringify({ action: 'login' }),
+        timestamp: new Date().toISOString()
+      });
+      
+      renderCatalogPage();
+    }
+
+    async function handleAdminLogin(e) {
+      e.preventDefault();
+      
+      const email = document.getElementById('adminEmail').value;
+      const password = document.getElementById('adminPassword').value;
+      const loginButton = document.getElementById('adminLoginButton');
+      const errorDiv = document.getElementById('adminLoginError');
+      
+      loginButton.disabled = true;
+      loginButton.innerHTML = '<span class="loading-spinner"></span>Logging in...';
+      errorDiv.style.display = 'none';
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (email === 'admin@pharmacy.com' && password === 'admin') {
+        const user = { email, isAdmin: true };
+        currentUser = user;
+        isAdmin = true;
+        localStorage.setItem('pharmacy_user', JSON.stringify(user));
+        
+        storage.create({
+          id: `activity_${Date.now()}_${Math.random()}`,
+          type: 'activity',
+          user_email: user.email,
+          data: JSON.stringify({ action: 'login' }),
+          timestamp: new Date().toISOString()
+        });
+        
+        renderAdminDashboard();
+      } else {
+        showLoginError('adminLoginError', 'Invalid admin credentials. Please try again.');
+        loginButton.disabled = false;
+        loginButton.innerHTML = 'Login as Admin';
+      }
+    }
+    
+    function showLoginError(errorDivId, message) {
+      const errorDiv = document.getElementById(errorDivId);
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    function handleLogout() {
+      if (currentUser) {
+        storage.create({
+          id: `activity_${Date.now()}_${Math.random()}`,
+          type: 'activity',
+          user_email: currentUser.email,
+          data: JSON.stringify({ action: 'logout' }),
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      localStorage.removeItem('pharmacy_user');
+      currentUser = null;
+      isAdmin = false;
+      if (refreshInterval) clearInterval(refreshInterval);
+      renderLoginPage();
+    }
+
+    function renderCatalogPage() {
+      currentPage = 'catalog';
+      const app = document.getElementById('app');
+      
+      app.style.background = '#f0f9ff';
+      
+      const cartItems = getUserCartItems();
+      const cartCount = cartItems.reduce((sum, item) => {
+        const parsed = JSON.parse(item.data);
+        return sum + parsed.quantity;
+      }, 0);
+      
+      app.innerHTML = `
+        <div class="w-full min-h-screen">
+          <header class="w-full p-6 shadow-md" style="background: #ffffff;">
+            <div class="max-w-7xl flex justify-between items-center flex-wrap gap-4">
+              <div class="flex items-center gap-3">
+                <span style="font-size: 24px;">🏥</span>
+                <h1 style="font-size: 24px; font-weight: 700; color: #1e293b;">MediCare Plus</h1>
+              </div>
+              <div class="flex items-center gap-4 flex-wrap">
+                <span style="font-size: 14px; color: #1e293b; opacity: 0.7;">👤 ${currentUser.email}</span>
+                
+                <button 
+                  id="ordersButton" 
+                  class="btn-primary"
+                  style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #8b5cf6; color: #ffffff;"
+                >
+                  📦 My Orders
+                </button>
+                
+                <button 
+                  id="cartButton" 
+                  class="btn-primary"
+                  style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+                >
+                  🛒 Cart <span id="cartBadge" class="cart-badge" style="background: #991b1b; color: white; border-radius: 9999px; padding: 2px 8px; font-size: 12px; margin-left: 8px;">${cartCount}</span>
+                </button>
+                
+                <button 
+                  id="logoutButton" 
+                  class="btn-primary"
+                  style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #64748b; color: #ffffff;"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+          
+          <main class="w-full p-8">
+            <div class="max-w-7xl">
+              <h2 style="font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 24px;">Available Medicines</h2>
+              
+              <div class="mb-6">
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                  <div style="flex: 1; min-width: 300px;">
+                    <input 
+                      type="text" 
+                      id="searchInput" 
+                      placeholder="🔍 Search medicines by name or manufacturer..."
+                      style="width: 100%; padding: 14px 20px; border: 2px solid #64748b; border-radius: 12px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                    />
+                  </div>
+                </div>
+                
+                <div style="margin-top: 16px;">
+                  <h3 style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">Filter by Price</h3>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button 
+                      class="price-filter-btn" 
+                      data-price="all"
+                      style="padding: 10px 20px; border: 2px solid #3b82f6; background: #3b82f6; color: #ffffff; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    >
+                      All Prices
+                    </button>
+                    <button 
+                      class="price-filter-btn" 
+                      data-price="0-50"
+                      style="padding: 10px 20px; border: 2px solid #3b82f6; background: #ffffff; color: #3b82f6; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    >
+                      Under Rs. 50
+                    </button>
+                    <button 
+                      class="price-filter-btn" 
+                      data-price="50-100"
+                      style="padding: 10px 20px; border: 2px solid #3b82f6; background: #ffffff; color: #3b82f6; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    >
+                      Rs. 50 - 100
+                    </button>
+                    <button 
+                      class="price-filter-btn" 
+                      data-price="100-150"
+                      style="padding: 10px 20px; border: 2px solid #3b82f6; background: #ffffff; color: #3b82f6; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    >
+                      Rs. 100 - 150
+                    </button>
+                    <button 
+                      class="price-filter-btn" 
+                      data-price="150-200"
+                      style="padding: 10px 20px; border: 2px solid #3b82f6; background: #ffffff; color: #3b82f6; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    >
+                      Rs. 150+
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div id="medicineGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+          </main>
+        </div>
+      `;
+      
+      renderMedicineCards();
+      document.getElementById('ordersButton').addEventListener('click', () => renderMyOrdersPage());
+      document.getElementById('cartButton').addEventListener('click', () => renderCartPage());
+      document.getElementById('logoutButton').addEventListener('click', handleLogout);
+      document.getElementById('searchInput').addEventListener('input', handleSearch);
+      
+      document.querySelectorAll('.price-filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => handlePriceFilterChange(e.target.dataset.price, e.target));
+      });
+    }
+    
+    let currentSearchTerm = '';
+    let currentPriceRange = 'all';
+    
+    function handleSearch(e) {
+      currentSearchTerm = e.target.value.toLowerCase();
+      renderMedicineCards();
+    }
+    
+    function handlePriceFilterChange(priceRange, button) {
+      currentPriceRange = priceRange;
+      
+      document.querySelectorAll('.price-filter-btn').forEach(btn => {
+        if (btn === button) {
+          btn.style.background = '#3b82f6';
+          btn.style.color = '#ffffff';
+        } else {
+          btn.style.background = '#ffffff';
+          btn.style.color = '#3b82f6';
+        }
+      });
+      
+      renderMedicineCards();
+    }
+
+    function getUserCartItems() {
+      return allData.filter(item => 
+        item.type === 'cart' && 
+        item.user_email === currentUser.email
+      );
+    }
+
+    function renderMedicineCards() {
+      const grid = document.getElementById('medicineGrid');
+      
+      const filteredMedicines = medicines.filter(medicine => {
+        const matchesSearch = !currentSearchTerm || 
+          medicine.name.toLowerCase().includes(currentSearchTerm) || 
+          medicine.manufacturer.toLowerCase().includes(currentSearchTerm);
+        
+        let matchesPrice = true;
+        if (currentPriceRange !== 'all') {
+          const price = medicine.price;
+          if (currentPriceRange === '0-50') {
+            matchesPrice = price < 50;
+          } else if (currentPriceRange === '50-100') {
+            matchesPrice = price >= 50 && price < 100;
+          } else if (currentPriceRange === '100-150') {
+            matchesPrice = price >= 100 && price < 150;
+          } else if (currentPriceRange === '150-200') {
+            matchesPrice = price >= 150;
+          }
+        }
+        
+        return matchesSearch && matchesPrice;
+      });
+      
+      if (filteredMedicines.length === 0) {
+        let message = 'No medicines found';
+        if (currentSearchTerm && currentPriceRange !== 'all') {
+          message = `No medicines found matching "${currentSearchTerm}" in this price range`;
+        } else if (currentSearchTerm) {
+          message = `No medicines found matching "${currentSearchTerm}"`;
+        } else if (currentPriceRange !== 'all') {
+          message = 'No medicines found in this price range';
+        }
+        
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 48px; border-radius: 12px; background: #ffffff;">
+            <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+            <p style="font-size: 18px; color: #1e293b; opacity: 0.7;">${message}</p>
+          </div>
+        `;
+        return;
+      }
+      
+      grid.innerHTML = filteredMedicines.map(medicine => `
+        <div class="medicine-card p-6 rounded-xl shadow-md" style="background: #ffffff;">
+          <div class="text-center mb-4">
+            <div class="medicine-image">
+              <img src="${medicine.image}" alt="${medicine.name}" onerror="this.src=''; this.alt='Image not available'; this.parentElement.innerHTML='<div style=\\'font-size: 64px;\\'>💊</div>';">
+            </div>
+            <h3 style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">${medicine.name}</h3>
+            <p style="font-size: 14px; color: #1e293b; opacity: 0.7; margin-bottom: 4px;">By ${medicine.manufacturer}</p>
+          </div>
+          
+          <div class="space-y-4 mb-4" style="font-size: 14px; color: #1e293b;">
+            <div class="flex justify-between">
+              <span style="opacity: 0.7;">Mfg Date:</span>
+              <span style="font-weight: 500;">${medicine.mfgDate}</span>
+            </div>
+            <div class="flex justify-between">
+              <span style="opacity: 0.7;">Exp Date:</span>
+              <span style="font-weight: 500;">${medicine.expDate}</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center justify-between" style="border-top: 1px solid rgba(100, 116, 139, 0.2); padding-top: 16px;">
+            <span style="font-size: 20px; font-weight: 700; color: #1e293b;">${rupee(medicine.price)}</span>
+            <button 
+              class="btn-primary add-to-cart-btn"
+              data-medicine-id="${medicine.id}"
+              style="padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+            >
+              Add to Cart
+            </button>
+          </div>
+        </div>
+      `).join('');
+      
+      document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => handleAddToCart(e.target.dataset.medicineId, e.target));
+      });
+    }
+
+    async function handleAddToCart(medicineId, button) {
+      if (loadingStates[medicineId]) return;
+      
+      loadingStates[medicineId] = true;
+      const originalText = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="loading-spinner"></span>Adding...';
+      
+      const medicine = medicines.find(m => m.id === medicineId);
+      const cartItems = getUserCartItems();
+      const existingItem = cartItems.find(item => {
+        const parsed = JSON.parse(item.data);
+        return parsed.medicine_id === medicineId;
+      });
+      
+      let result;
+      if (existingItem) {
+        const parsed = JSON.parse(existingItem.data);
+        parsed.quantity += 1;
+        result = storage.update({
+          ...existingItem,
+          data: JSON.stringify(parsed)
+        });
+      } else {
+        const cartData = {
+          medicine_id: medicineId,
+          name: medicine.name,
+          price: medicine.price,
+          quantity: 1,
+          image: medicine.image
+        };
+        result = storage.create({
+          id: `cart_${Date.now()}_${Math.random()}`,
+          type: 'cart',
+          user_email: currentUser.email,
+          data: JSON.stringify(cartData),
+          timestamp: new Date().toISOString()
+        });
+        
+        storage.create({
+          id: `activity_${Date.now()}_${Math.random()}`,
+          type: 'activity',
+          user_email: currentUser.email,
+          data: JSON.stringify({ action: 'add_to_cart', medicine: medicine.name }),
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      loadingStates[medicineId] = false;
+      button.disabled = false;
+      button.innerHTML = originalText;
+      
+      if (!result.isOk) {
+        showToast('Failed to add to cart. Please try again.');
+      } else {
+        showToast('Added to cart!');
+        updateCartBadge();
+      }
+    }
+
+    function updateCartBadge() {
+      const badge = document.getElementById('cartBadge');
+      if (badge) {
+        const cartItems = getUserCartItems();
+        const cartCount = cartItems.reduce((sum, item) => {
+          const parsed = JSON.parse(item.data);
+          return sum + parsed.quantity;
+        }, 0);
+        badge.textContent = cartCount;
+        badge.classList.add('cart-badge');
+        setTimeout(() => badge.classList.remove('cart-badge'), 300);
+      }
+    }
+
+    function renderCartPage() {
+      currentPage = 'cart';
+      const app = document.getElementById('app');
+      
+      app.style.background = '#f0f9ff';
+      
+      const cartItems = getUserCartItems();
+      
+      let subtotal = 0;
+      cartItems.forEach(item => {
+        const parsed = JSON.parse(item.data);
+        subtotal += parsed.price * parsed.quantity;
+      });
+      
+      const tax = subtotal * 0.1;
+      const total = subtotal + tax;
+      
+      app.innerHTML = `
+        <div class="w-full min-h-screen">
+          <header class="w-full p-6 shadow-md" style="background: #ffffff;">
+            <div class="max-w-7xl flex justify-between items-center">
+              <div class="flex items-center gap-3">
+                <span style="font-size: 24px;">🏥</span>
+                <h1 style="font-size: 24px; font-weight: 700; color: #1e293b;">MediCare Plus</h1>
+              </div>
+              <button 
+                id="backButton" 
+                class="btn-primary"
+                style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #64748b; color: #ffffff;"
+              >
+                ← Back to Catalog
+              </button>
+            </div>
+          </header>
+          
+          <main class="w-full p-8">
+            <div class="max-w-4xl">
+              <h2 style="font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 32px;">Shopping Cart</h2>
+              
+              ${cartItems.length === 0 ? `
+                <div class="text-center p-8 rounded-xl" style="background: #ffffff; padding: 48px;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">🛒</div>
+                  <p style="font-size: 18px; color: #1e293b; opacity: 0.7;">Your cart is empty</p>
+                </div>
+              ` : `
+                <div id="cartItems" class="space-y-4 mb-8"></div>
+                
+                <div class="p-6 rounded-xl" style="background: #ffffff;">
+                  <h3 style="font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 16px;">Order Summary</h3>
+                  
+                  <div class="space-y-4" style="font-size: 16px; color: #1e293b;">
+                    <div class="flex justify-between">
+                      <span style="opacity: 0.7;">Subtotal:</span>
+                      <span style="font-weight: 500;">${rupee(subtotal)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span style="opacity: 0.7;">Tax (10%):</span>
+                      <span style="font-weight: 500;">${rupee(tax)}</span>
+                    </div>
+                    <div class="flex justify-between" style="border-top: 2px solid rgba(100, 116, 139, 0.2); padding-top: 12px;">
+                      <span style="font-size: 18px; font-weight: 700;">Total:</span>
+                      <span style="font-size: 20px; font-weight: 700; color: #3b82f6;">${rupee(total)}</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    id="checkoutButton" 
+                    class="btn-primary"
+                    style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 24px; background: #3b82f6; color: #ffffff;"
+                  >
+                    Proceed to Checkout
+                  </button>
+                </div>
+              `}
+            </div>
+          </main>
+        </div>
+      `;
+      
+      if (cartItems.length > 0) {
+        renderCartItems();
+        document.getElementById('checkoutButton').addEventListener('click', handleCheckout);
+      }
+      
+      document.getElementById('backButton').addEventListener('click', renderCatalogPage);
+    }
+
+    function renderCartItems() {
+      const container = document.getElementById('cartItems');
+      const cartItems = getUserCartItems();
+      
+      container.innerHTML = cartItems.map(item => {
+        const parsed = JSON.parse(item.data);
+        
+        return `
+          <div class="flex items-center gap-4 p-4 rounded-xl" style="background: #ffffff;">
+            <div style="flex-shrink: 0;">
+              <div style="width: 80px; height: 80px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #e5e7eb;">
+                <img src="${parsed.image}" alt="${parsed.name}" style="width: 100%; height: 100%; object-fit: contain; padding: 8px;" onerror="this.parentElement.innerHTML='<div style=\\'font-size: 32px;\\'>💊</div>';">
+              </div>
+            </div>
+            
+            <div class="flex-1">
+              <h4 style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">${parsed.name}</h4>
+              <p style="font-size: 14px; color: #1e293b; opacity: 0.7;">${rupee(parsed.price)} each</p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <button 
+                class="quantity-btn decrease-btn"
+                data-item-id="${item.__backendId}"
+                style="width: 32px; height: 32px; border: none; border-radius: 8px; font-size: 18px; font-weight: 600; cursor: pointer; background: #64748b; color: #ffffff;"
+              >
+                −
+              </button>
+              <span style="font-size: 16px; font-weight: 600; color: #1e293b; min-width: 32px; text-align: center;">${parsed.quantity}</span>
+              <button 
+                class="quantity-btn increase-btn"
+                data-item-id="${item.__backendId}"
+                style="width: 32px; height: 32px; border: none; border-radius: 8px; font-size: 18px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+              >
+                +
+              </button>
+            </div>
+            
+            <button 
+              class="remove-btn"
+              data-item-id="${item.__backendId}"
+              style="padding: 8px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #ef4444; color: #ffffff;"
+            >
+              Remove
+            </button>
+          </div>
+        `;
+      }).join('');
+      
+      document.querySelectorAll('.decrease-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => handleQuantityChange(e.target.dataset.itemId, -1, e.target));
+      });
+      
+      document.querySelectorAll('.increase-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => handleQuantityChange(e.target.dataset.itemId, 1, e.target));
+      });
+      
+      document.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => handleRemoveItem(e.target.dataset.itemId, e.target));
+      });
+    }
+
+    async function handleQuantityChange(itemId, change, button) {
+      if (loadingStates[itemId]) return;
+      
+      const item = allData.find(i => i.__backendId === itemId);
+      const parsed = JSON.parse(item.data);
+      const newQuantity = parsed.quantity + change;
+      
+      if (newQuantity < 1) return;
+      
+      loadingStates[itemId] = true;
+      button.disabled = true;
+      
+      parsed.quantity = newQuantity;
+      const result = storage.update({
+        ...item,
+        data: JSON.stringify(parsed)
+      });
+      
+      loadingStates[itemId] = false;
+      button.disabled = false;
+      
+      if (!result.isOk) {
+        showToast('Failed to update quantity. Please try again.');
+      }
+    }
+
+    async function handleRemoveItem(itemId, button) {
+      if (loadingStates[itemId]) return;
+      
+      const item = allData.find(i => i.__backendId === itemId);
+      
+      loadingStates[itemId] = true;
+      button.disabled = true;
+      button.innerHTML = '<span class="loading-spinner"></span>Removing...';
+      
+      const result = storage.delete(item);
+      
+      loadingStates[itemId] = false;
+      
+      if (!result.isOk) {
+        button.disabled = false;
+        button.innerHTML = 'Remove';
+        showToast('Failed to remove item. Please try again.');
+      }
+    }
+
+    function handleCheckout() {
+      showPaymentModal();
+    }
+
+    function showPaymentModal() {
+      const cartItems = getUserCartItems();
+      let subtotal = 0;
+      cartItems.forEach(item => {
+        const parsed = JSON.parse(item.data);
+        subtotal += parsed.price * parsed.quantity;
+      });
+      const total = subtotal * 1.1;
+      
+      const modal = document.createElement('div');
+      modal.id = 'paymentModal';
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+      
+      modal.innerHTML = `
+        <div class="w-full max-w-md p-8 rounded-2xl" style="background: #ffffff; max-height: 90%; overflow-y: auto;">
+          <h3 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 24px;">Checkout</h3>
+          
+          <form id="paymentForm" class="space-y-4">
+            <div style="margin-bottom: 24px;">
+              <h4 style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">📍 Delivery Address</h4>
+              
+              <div style="margin-bottom: 12px;">
+                <label for="fullName" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Full Name</label>
+                <input 
+                  type="text" 
+                  id="fullName" 
+                  required 
+                  placeholder="John Doe"
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                />
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label for="phone" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Phone Number</label>
+                <input 
+                  type="tel" 
+                  id="phone" 
+                  required 
+                  placeholder="+91 9876543210"
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                />
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label for="address" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Street Address</label>
+                <textarea 
+                  id="address" 
+                  required 
+                  rows="2"
+                  placeholder="123 Main Street, Apartment 4B"
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff; resize: vertical;"
+                ></textarea>
+              </div>
+              
+              <div class="flex gap-4" style="margin-bottom: 12px; display: flex; gap: 16px;">
+                <div class="flex-1">
+                  <label for="city" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">City</label>
+                  <input 
+                    type="text" 
+                    id="city" 
+                    required 
+                    placeholder="Mumbai"
+                    style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                  />
+                </div>
+                
+                <div class="flex-1">
+                  <label for="pincode" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Pincode</label>
+                  <input 
+                    type="text" 
+                    id="pincode" 
+                    required 
+                    placeholder="400001"
+                    maxlength="6"
+                    style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                  />
+                </div>
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label for="state" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">State</label>
+                <input 
+                  type="text" 
+                  id="state" 
+                  required 
+                  placeholder="Maharashtra"
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                />
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 24px;">
+              <h4 style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">💳 Payment Method</h4>
+              
+              <div style="margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; padding: 14px; border: 2px solid #64748b; border-radius: 8px; cursor: pointer; background: #ffffff; margin-bottom: 8px;" class="payment-option">
+                  <input 
+                    type="radio" 
+                    name="paymentMethod" 
+                    value="cod" 
+                    required
+                    checked
+                    style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;"
+                  />
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                      <span style="font-size: 20px;">💵</span>
+                      <span style="font-size: 16px; font-weight: 600; color: #1e293b;">Cash on Delivery</span>
+                    </div>
+                    <p style="font-size: 13px; color: #64748b; margin: 0;">Pay when you receive your order</p>
+                  </div>
+                </label>
+                
+                <label style="display: flex; align-items: center; padding: 14px; border: 2px solid #64748b; border-radius: 8px; cursor: pointer; background: #ffffff; margin-bottom: 8px;" class="payment-option">
+                  <input 
+                    type="radio" 
+                    name="paymentMethod" 
+                    value="upi" 
+                    required
+                    style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;"
+                  />
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                      <span style="font-size: 20px;">📱</span>
+                      <span style="font-size: 16px; font-weight: 600; color: #1e293b;">UPI Payment</span>
+                    </div>
+                    <p style="font-size: 13px; color: #64748b; margin: 0;">Google Pay, PhonePe, Paytm & more</p>
+                  </div>
+                </label>
+                
+                <label style="display: flex; align-items: center; padding: 14px; border: 2px solid #64748b; border-radius: 8px; cursor: pointer; background: #ffffff; margin-bottom: 8px;" class="payment-option">
+                  <input 
+                    type="radio" 
+                    name="paymentMethod" 
+                    value="card" 
+                    required
+                    style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;"
+                  />
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                      <span style="font-size: 20px;">💳</span>
+                      <span style="font-size: 16px; font-weight: 600; color: #1e293b;">Debit/Credit Card</span>
+                    </div>
+                    <p style="font-size: 13px; color: #64748b; margin: 0;">Visa, Mastercard, RuPay accepted</p>
+                  </div>
+                </label>
+                
+                <label style="display: flex; align-items: center; padding: 14px; border: 2px solid #64748b; border-radius: 8px; cursor: pointer; background: #ffffff;" class="payment-option">
+                  <input 
+                    type="radio" 
+                    name="paymentMethod" 
+                    value="netbanking" 
+                    required
+                    style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;"
+                  />
+                  <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                      <span style="font-size: 20px;">🏦</span>
+                      <span style="font-size: 16px; font-weight: 600; color: #1e293b;">Net Banking</span>
+                    </div>
+                    <p style="font-size: 13px; color: #64748b; margin: 0;">All major banks supported</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            <div style="border-top: 2px solid rgba(100, 116, 139, 0.2); padding-top: 16px;">
+              <div class="flex justify-between mb-4" style="display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 18px; font-weight: 700; color: #1e293b;">
+                <span>Total Amount:</span>
+                <span style="color: #3b82f6;">${rupee(total)}</span>
+              </div>
+              
+              <button 
+                type="submit" 
+                class="btn-primary"
+                style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+              >
+                Place Order
+              </button>
+              
+              <button 
+                type="button" 
+                id="cancelPayment"
+                style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 12px; background: #64748b; color: #ffffff;"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      document.getElementById('paymentForm').addEventListener('submit', handlePaymentSubmit);
+      document.getElementById('cancelPayment').addEventListener('click', () => {
+        document.body.removeChild(modal);
+      });
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
+      
+      // Handle payment option selection highlighting
+      const paymentOptions = modal.querySelectorAll('.payment-option');
+      paymentOptions.forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        
+        if (radio.checked) {
+          option.style.borderColor = '#3b82f6';
+          option.style.background = '#eff6ff';
+        }
+        
+        radio.addEventListener('change', () => {
+          paymentOptions.forEach(opt => {
+            opt.style.borderColor = '#64748b';
+            opt.style.background = '#ffffff';
+          });
+          
+          if (radio.checked) {
+            option.style.borderColor = '#3b82f6';
+            option.style.background = '#eff6ff';
+          }
+        });
+      });
+    }
+
+    async function handlePaymentSubmit(e) {
+      e.preventDefault();
+      
+      const deliveryAddress = {
+        fullName: document.getElementById('fullName').value,
+        phone: document.getElementById('phone').value,
+        address: document.getElementById('address').value,
+        city: document.getElementById('city').value,
+        pincode: document.getElementById('pincode').value,
+        state: document.getElementById('state').value
+      };
+      
+      const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+      
+      const paymentLabels = {
+        cod: 'Cash on Delivery',
+        upi: 'UPI Payment',
+        card: 'Debit/Credit Card',
+        netbanking: 'Net Banking'
+      };
+      
+      const cartItems = getUserCartItems();
+      let subtotal = 0;
+      const items = [];
+      
+      cartItems.forEach(item => {
+        const parsed = JSON.parse(item.data);
+        subtotal += parsed.price * parsed.quantity;
+        items.push(parsed);
+      });
+      
+      const total = subtotal * 1.1;
+      
+      const orderData = {
+        user_email: currentUser.email,
+        items: items,
+        subtotal: subtotal,
+        total: total,
+        status: 'pending',
+        delivery_address: deliveryAddress,
+        payment_method: paymentMethod,
+        payment_label: paymentLabels[paymentMethod]
+      };
+      
+      const result = storage.create({
+        id: `order_${Date.now()}_${Math.random()}`,
+        type: 'order',
+        user_email: currentUser.email,
+        data: JSON.stringify(orderData),
+        timestamp: new Date().toISOString()
+      });
+      
+      storage.create({
+        id: `activity_${Date.now()}_${Math.random()}`,
+        type: 'activity',
+        user_email: currentUser.email,
+        data: JSON.stringify({ action: 'order_placed', total: total }),
+        timestamp: new Date().toISOString()
+      });
+      
+      for (const item of cartItems) {
+        storage.delete(item);
+      }
+      
+      const modal = document.getElementById('paymentModal');
+      if (modal) document.body.removeChild(modal);
+      
+      if (result.isOk) {
+        showSuccessMessage();
+      } else {
+        showToast('Order placement failed. Please try again.');
+      }
+    }
+
+    function showSuccessMessage() {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="w-full min-h-screen flex items-center justify-center p-8">
+          <div class="w-full max-w-md p-8 rounded-2xl text-center" style="background: #ffffff;">
+            <div style="font-size: 64px; margin-bottom: 24px;">✅</div>
+            <h2 style="font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 16px;">Order Placed Successfully!</h2>
+            <p style="font-size: 16px; color: #1e293b; opacity: 0.7; margin-bottom: 32px;">Your medicines will be delivered to your address soon. Thank you for your order!</p>
+            <div class="flex gap-3" style="display: flex; gap: 12px; justify-content: center;">
+              <button 
+                id="viewOrders"
+                class="btn-primary"
+                style="padding: 14px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #8b5cf6; color: #ffffff;"
+              >
+                View My Orders
+              </button>
+              <button 
+                id="continueShopping"
+                class="btn-primary"
+                style="padding: 14px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+              >
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('viewOrders').addEventListener('click', renderMyOrdersPage);
+      document.getElementById('continueShopping').addEventListener('click', renderCatalogPage);
+    }
+
+    function renderMyOrdersPage() {
+      currentPage = 'myorders';
+      const app = document.getElementById('app');
+      
+      app.style.background = '#f0f9ff';
+      
+      const userOrders = allData.filter(item => 
+        item.type === 'order' && 
+        item.user_email === currentUser.email
+      ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      app.innerHTML = `
+        <div class="w-full min-h-screen">
+          <header class="w-full p-6 shadow-md" style="background: #ffffff;">
+            <div class="max-w-7xl flex justify-between items-center">
+              <div class="flex items-center gap-3">
+                <span style="font-size: 24px;">🏥</span>
+                <h1 style="font-size: 24px; font-weight: 700; color: #1e293b;">MediCare Plus</h1>
+              </div>
+              <button 
+                id="backButton" 
+                class="btn-primary"
+                style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #64748b; color: #ffffff;"
+              >
+                ← Back to Catalog
+              </button>
+            </div>
+          </header>
+          
+          <main class="w-full p-8">
+            <div class="max-w-7xl">
+              <h2 style="font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 32px;">My Orders</h2>
+              
+              ${userOrders.length === 0 ? `
+                <div class="text-center p-8 rounded-xl" style="background: #ffffff; padding: 48px;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
+                  <p style="font-size: 18px; color: #1e293b; opacity: 0.7; margin-bottom: 16px;">You haven't placed any orders yet</p>
+                  <button 
+                    id="startShopping"
+                    class="btn-primary"
+                    style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #ffffff;"
+                  >
+                    Start Shopping
+                  </button>
+                </div>
+              ` : `
+                <div id="ordersContainer" class="space-y-6"></div>
+              `}
+            </div>
+          </main>
+        </div>
+      `;
+      
+      if (userOrders.length === 0) {
+        document.getElementById('startShopping').addEventListener('click', renderCatalogPage);
+      } else {
+        renderUserOrders(userOrders);
+      }
+      
+      document.getElementById('backButton').addEventListener('click', renderCatalogPage);
+    }
+
+    function renderUserOrders(orders) {
+      const container = document.getElementById('ordersContainer');
+      
+      const statusColors = {
+        pending: { bg: '#fef3c7', text: '#92400e', label: 'Pending', icon: '⏳' },
+        processing: { bg: '#dbeafe', text: '#1e40af', label: 'Processing', icon: '🔄' },
+        completed: { bg: '#d1fae5', text: '#065f46', label: 'Completed', icon: '✅' },
+        cancelled: { bg: '#fee2e2', text: '#991b1b', label: 'Cancelled', icon: '❌' }
+      };
+      
+      container.innerHTML = orders.map(order => {
+        const parsed = JSON.parse(order.data);
+        const status = parsed.status || 'pending';
+        const statusInfo = statusColors[status];
+        const orderId = order.id.slice(-12).toUpperCase();
+        const address = parsed.delivery_address;
+        
+        return `
+          <div class="p-6 rounded-xl shadow-md" style="background: #ffffff;">
+            <div class="flex justify-between items-start mb-4" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 16px;">
+              <div>
+                <h3 style="font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">Order #${orderId}</h3>
+                <p style="font-size: 14px; color: #1e293b; opacity: 0.7;">Placed on ${new Date(order.timestamp).toLocaleDateString()} at ${new Date(order.timestamp).toLocaleTimeString()}</p>
+              </div>
+              <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 9999px; background: ${statusInfo.bg};">
+                <span style="font-size: 18px;">${statusInfo.icon}</span>
+                <span style="font-size: 14px; font-weight: 600; color: ${statusInfo.text};">${statusInfo.label}</span>
+              </div>
+            </div>
+            
+            ${address ? `
+              <div class="mb-4 p-4 rounded-lg" style="margin-bottom: 16px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">📍 Delivery Address</h4>
+                <p style="font-size: 14px; color: #1e293b; line-height: 1.6;">
+                  <strong>${address.fullName}</strong><br>
+                  ${address.phone}<br>
+                  ${address.address}<br>
+                  ${address.city}, ${address.state} - ${address.pincode}
+                </p>
+              </div>
+            ` : ''}
+            
+            ${parsed.payment_label ? `
+              <div class="mb-4 p-4 rounded-lg" style="margin-bottom: 16px; padding: 16px; background: #f0f9ff; border-radius: 8px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">💳 Payment Method</h4>
+                <p style="font-size: 14px; color: #1e293b; font-weight: 500;">
+                  ${parsed.payment_label}
+                </p>
+              </div>
+            ` : ''}
+            
+            <div class="mb-4" style="margin-bottom: 16px;">
+              <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">📦 Order Items</h4>
+              <div class="space-y-3" style="display: flex; flex-direction: column; gap: 12px;">
+                ${parsed.items.map(item => `
+                  <div class="flex items-center gap-4" style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 60px; height: 60px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; border: 1px solid #e5e7eb;">
+                      <img src="${item.image}" alt="${item.name}" style="width: 100%; height: 100%; object-fit: contain; padding: 8px;" onerror="this.parentElement.innerHTML='<div style=\\'font-size: 24px;\\'>💊</div>';">
+                    </div>
+                    <div class="flex-1">
+                      <p style="font-size: 16px; font-weight: 600; color: #1e293b;">${item.name}</p>
+                      <p style="font-size: 14px; color: #1e293b; opacity: 0.7;">Qty: ${item.quantity} × ${rupee(item.price)}</p>
+                    </div>
+                    <div>
+                      <p style="font-size: 16px; font-weight: 600; color: #1e293b;">${rupee(item.price * item.quantity)}</p>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            
+            <div style="border-top: 2px solid rgba(100, 116, 139, 0.2); padding-top: 16px;">
+              <div class="flex justify-between mb-2" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 14px; color: #1e293b; opacity: 0.7;">Subtotal:</span>
+                <span style="font-size: 14px; font-weight: 500; color: #1e293b;">${rupee(parsed.subtotal)}</span>
+              </div>
+              <div class="flex justify-between mb-2" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 14px; color: #1e293b; opacity: 0.7;">Tax (10%):</span>
+                <span style="font-size: 14px; font-weight: 500; color: #1e293b;">${rupee(parsed.total - parsed.subtotal)}</span>
+              </div>
+              <div class="flex justify-between" style="display: flex; justify-content: space-between; border-top: 1px solid rgba(100, 116, 139, 0.2); padding-top: 12px; margin-top: 8px;">
+                <span style="font-size: 18px; font-weight: 700; color: #1e293b;">Total:</span>
+                <span style="font-size: 20px; font-weight: 700; color: #3b82f6;">${rupee(parsed.total)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 2000);
+    }
+
+    function renderAdminDashboard() {
+      currentPage = 'admin';
+      const app = document.getElementById('app');
+      
+      app.style.background = '#f9fafb';
+      
+      app.innerHTML = `
+        <div class="w-full min-h-screen">
+          <header class="w-full p-6 shadow-md" style="background: #ffffff;">
+            <div class="max-w-7xl flex justify-between items-center">
+              <div class="flex items-center gap-3">
+                <span style="font-size: 24px;">🏥</span>
+                <h1 style="font-size: 24px; font-weight: 700; color: #1f2937;">Admin Dashboard</h1>
+              </div>
+              <button 
+                id="adminLogoutBtn" 
+                class="btn-primary"
+                style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #ef4444; color: #ffffff;"
+              >
+                Logout
+              </button>
+            </div>
+          </header>
+
+          <main class="max-w-7xl p-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div class="stat-card p-6 rounded-xl shadow-md" style="background: #ffffff;">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p style="font-size: 14px; color: #6b7280; font-weight: 500;">Total Orders</p>
+                    <p id="totalOrders" style="font-size: 32px; font-weight: 700; color: #3b82f6; margin-top: 8px;">0</p>
+                  </div>
+                  <div style="font-size: 48px;">📦</div>
+                </div>
+              </div>
+              
+              <div class="stat-card p-6 rounded-xl shadow-md" style="background: #ffffff;">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p style="font-size: 14px; color: #6b7280; font-weight: 500;">Total Revenue</p>
+                    <p id="totalRevenue" style="font-size: 32px; font-weight: 700; color: #10b981; margin-top: 8px;">Rs. 0</p>
+                  </div>
+                  <div style="font-size: 48px;">💰</div>
+                </div>
+              </div>
+              
+              <div class="stat-card p-6 rounded-xl shadow-md" style="background: #ffffff;">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p style="font-size: 14px; color: #6b7280; font-weight: 500;">Total Users</p>
+                    <p id="totalUsers" style="font-size: 32px; font-weight: 700; color: #8b5cf6; margin-top: 8px;">0</p>
+                  </div>
+                  <div style="font-size: 48px;">👥</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-6 rounded-xl shadow-md" style="background: #ffffff;">
+              <div class="flex" style="border-bottom: 1px solid #e5e7eb;">
+                <button 
+                  id="ordersTab" 
+                  class="tab-btn flex-1"
+                  style="padding: 16px 24px; color: #3b82f6; border-bottom: 2px solid #3b82f6; font-size: 16px; font-weight: 600; background: none; border-top: none; border-left: none; border-right: none; cursor: pointer;"
+                >
+                  Orders
+                </button>
+                <button 
+                  id="inventoryTab" 
+                  class="tab-btn flex-1"
+                  style="padding: 16px 24px; color: #6b7280; font-size: 16px; font-weight: 600; background: none; border: none; cursor: pointer;"
+                >
+                  Inventory
+                </button>
+                <button 
+                  id="activitiesTab" 
+                  class="tab-btn flex-1"
+                  style="padding: 16px 24px; color: #6b7280; font-size: 16px; font-weight: 600; background: none; border: none; cursor: pointer;"
+                >
+                  User Activities
+                </button>
+                <button 
+                  id="usersTab" 
+                  class="tab-btn flex-1"
+                  style="padding: 16px 24px; color: #6b7280; font-size: 16px; font-weight: 600; background: none; border: none; cursor: pointer;"
+                >
+                  Users Overview
+                </button>
+              </div>
+            </div>
+
+            <div id="ordersPanel" class="rounded-xl shadow-md p-6" style="background: #ffffff;">
+              <h2 style="font-size: 20px; font-weight: 700; color: #1f2937; margin-bottom: 16px;">Recent Orders</h2>
+              <div class="overflow-x-auto">
+                <div id="ordersContent"></div>
+              </div>
+            </div>
+
+            <div id="inventoryPanel" class="rounded-xl shadow-md p-6 hidden" style="background: #ffffff;">
+              <div class="flex justify-between items-center mb-6" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 20px; font-weight: 700; color: #1f2937;">Medicine Inventory</h2>
+                <button 
+                  id="addMedicineBtn"
+                  class="btn-primary"
+                  style="padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #10b981; color: #ffffff;"
+                >
+                  + Add Medicine
+                </button>
+              </div>
+              <div id="inventoryContent"></div>
+            </div>
+
+            <div id="activitiesPanel" class="rounded-xl shadow-md p-6 hidden" style="background: #ffffff;">
+              <h2 style="font-size: 20px; font-weight: 700; color: #1f2937; margin-bottom: 24px;">User Activities Monitor</h2>
+              
+              <div class="mb-6" style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                  <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;">Filter by User</label>
+                  <select 
+                    id="userFilter"
+                    style="width: 100%; padding: 10px 14px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #374151; background: #ffffff; cursor: pointer;"
+                  >
+                    <option value="all">All Users</option>
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 200px;">
+                  <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;">Filter by Action</label>
+                  <select 
+                    id="actionFilter"
+                    style="width: 100%; padding: 10px 14px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #374151; background: #ffffff; cursor: pointer;"
+                  >
+                    <option value="all">All Actions</option>
+                    <option value="login">Login</option>
+                    <option value="logout">Logout</option>
+                    <option value="add_to_cart">Add to Cart</option>
+                    <option value="order_placed">Order Placed</option>
+                  </select>
+                </div>
+                
+                <div style="flex: 1; min-width: 200px;">
+                  <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;">Time Range</label>
+                  <select 
+                    id="timeFilter"
+                    style="width: 100%; padding: 10px 14px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #374151; background: #ffffff; cursor: pointer;"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">Last 7 Days</option>
+                    <option value="month">Last 30 Days</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div id="activitiesList" class="space-y-4"></div>
+            </div>
+
+            <div id="usersPanel" class="rounded-xl shadow-md p-6 hidden" style="background: #ffffff;">
+              <h2 style="font-size: 20px; font-weight: 700; color: #1f2937; margin-bottom: 16px;">Users Overview</h2>
+              <div id="usersContent"></div>
+            </div>
+          </main>
+        </div>
+      `;
+      
+      document.getElementById('adminLogoutBtn').addEventListener('click', handleLogout);
+      document.getElementById('ordersTab').addEventListener('click', () => switchAdminTab('orders'));
+      document.getElementById('inventoryTab').addEventListener('click', () => switchAdminTab('inventory'));
+      document.getElementById('activitiesTab').addEventListener('click', () => switchAdminTab('activities'));
+      document.getElementById('usersTab').addEventListener('click', () => switchAdminTab('users'));
+      
+      renderAdminDashboardData();
+      refreshInterval = setInterval(renderAdminDashboardData, 10000);
+    }
+    
+    function switchAdminTab(tab) {
+      const ordersTab = document.getElementById('ordersTab');
+      const inventoryTab = document.getElementById('inventoryTab');
+      const activitiesTab = document.getElementById('activitiesTab');
+      const usersTab = document.getElementById('usersTab');
+      const ordersPanel = document.getElementById('ordersPanel');
+      const inventoryPanel = document.getElementById('inventoryPanel');
+      const activitiesPanel = document.getElementById('activitiesPanel');
+      const usersPanel = document.getElementById('usersPanel');
+      
+      ordersTab.style.color = '#6b7280';
+      ordersTab.style.borderBottom = 'none';
+      inventoryTab.style.color = '#6b7280';
+      inventoryTab.style.borderBottom = 'none';
+      activitiesTab.style.color = '#6b7280';
+      activitiesTab.style.borderBottom = 'none';
+      usersTab.style.color = '#6b7280';
+      usersTab.style.borderBottom = 'none';
+      
+      ordersPanel.classList.add('hidden');
+      inventoryPanel.classList.add('hidden');
+      activitiesPanel.classList.add('hidden');
+      usersPanel.classList.add('hidden');
+      
+      if (tab === 'orders') {
+        ordersTab.style.color = '#3b82f6';
+        ordersTab.style.borderBottom = '2px solid #3b82f6';
+        ordersPanel.classList.remove('hidden');
+      } else if (tab === 'inventory') {
+        inventoryTab.style.color = '#3b82f6';
+        inventoryTab.style.borderBottom = '2px solid #3b82f6';
+        inventoryPanel.classList.remove('hidden');
+        renderInventory();
+      } else if (tab === 'activities') {
+        activitiesTab.style.color = '#3b82f6';
+        activitiesTab.style.borderBottom = '2px solid #3b82f6';
+        activitiesPanel.classList.remove('hidden');
+        setupActivityFilters();
+      } else if (tab === 'users') {
+        usersTab.style.color = '#3b82f6';
+        usersTab.style.borderBottom = '2px solid #3b82f6';
+        usersPanel.classList.remove('hidden');
+      }
+    }
+    
+    let currentActivityFilters = {
+      user: 'all',
+      action: 'all',
+      time: 'all'
+    };
+    
+    function setupActivityFilters() {
+      const userFilter = document.getElementById('userFilter');
+      const actionFilter = document.getElementById('actionFilter');
+      const timeFilter = document.getElementById('timeFilter');
+      
+      const users = new Set(allData.filter(item => item.type === 'activity').map(item => item.user_email));
+      userFilter.innerHTML = '<option value="all">All Users</option>' + 
+        Array.from(users).map(email => `<option value="${email}">${email}</option>`).join('');
+      
+      userFilter.value = currentActivityFilters.user;
+      actionFilter.value = currentActivityFilters.action;
+      timeFilter.value = currentActivityFilters.time;
+      
+      userFilter.addEventListener('change', () => {
+        currentActivityFilters.user = userFilter.value;
+        renderFilteredActivities();
+      });
+      
+      actionFilter.addEventListener('change', () => {
+        currentActivityFilters.action = actionFilter.value;
+        renderFilteredActivities();
+      });
+      
+      timeFilter.addEventListener('change', () => {
+        currentActivityFilters.time = timeFilter.value;
+        renderFilteredActivities();
+      });
+      
+      renderFilteredActivities();
+    }
+    
+    function renderFilteredActivities() {
+      let activities = allData.filter(item => item.type === 'activity');
+      
+      if (currentActivityFilters.user !== 'all') {
+        activities = activities.filter(item => item.user_email === currentActivityFilters.user);
+      }
+      
+      if (currentActivityFilters.action !== 'all') {
+        activities = activities.filter(item => {
+          const parsed = JSON.parse(item.data);
+          return parsed.action === currentActivityFilters.action;
+        });
+      }
+      
+      if (currentActivityFilters.time !== 'all') {
+        const now = new Date();
+        const filterDate = new Date();
+        
+        if (currentActivityFilters.time === 'today') {
+          filterDate.setHours(0, 0, 0, 0);
+        } else if (currentActivityFilters.time === 'week') {
+          filterDate.setDate(now.getDate() - 7);
+        } else if (currentActivityFilters.time === 'month') {
+          filterDate.setDate(now.getDate() - 30);
+        }
+        
+        activities = activities.filter(item => new Date(item.timestamp) >= filterDate);
+      }
+      
+      renderAdminActivities(activities);
+    }
+    
+    function renderAdminDashboardData() {
+      const orders = allData.filter(item => item.type === 'order');
+      const activities = allData.filter(item => item.type === 'activity');
+      const users = new Set(allData.map(item => item.user_email));
+      
+      let totalRevenue = 0;
+      orders.forEach(order => {
+        const parsed = JSON.parse(order.data);
+        totalRevenue += parsed.total || 0;
+      });
+      
+      document.getElementById('totalOrders').textContent = orders.length;
+      document.getElementById('totalRevenue').textContent = rupee(totalRevenue);
+      document.getElementById('totalUsers').textContent = users.size;
+      
+      renderAdminOrders(orders);
+      renderUsersOverview();
+      
+      const currentPanel = document.querySelector('.tab-btn[style*="rgb(59, 130, 246)"]');
+      if (currentPanel && currentPanel.id === 'activitiesTab') {
+        renderFilteredActivities();
+      }
+    }
+    
+    function renderAdminOrders(orders) {
+      const container = document.getElementById('ordersContent');
+      
+      if (orders.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 32px; color: #6b7280; font-size: 16px;">No orders yet</p>`;
+        return;
+      }
+      
+      const statusColors = {
+        pending: { bg: '#fef3c7', text: '#92400e' },
+        processing: { bg: '#dbeafe', text: '#1e40af' },
+        completed: { bg: '#d1fae5', text: '#065f46' },
+        cancelled: { bg: '#fee2e2', text: '#991b1b' }
+      };
+      
+      const sortedOrders = [...orders].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      container.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Order ID</th>
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">User Email</th>
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Delivery Address</th>
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Total</th>
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Status</th>
+              <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedOrders.map(order => {
+              const parsed = JSON.parse(order.data);
+              const status = parsed.status || 'pending';
+              const address = parsed.delivery_address;
+              const addressStr = address ? `${address.address}, ${address.city}, ${address.state} - ${address.pincode}` : 'N/A';
+              
+              return `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <td style="padding: 12px; font-family: monospace; font-size: 14px; color: #374151;">${order.id.slice(-12)}</td>
+                  <td style="padding: 12px; font-size: 14px; color: #374151;">${order.user_email}</td>
+                  <td style="padding: 12px; font-size: 12px; color: #6b7280; max-width: 250px;">${addressStr}</td>
+                  <td style="padding: 12px; font-weight: 600; font-size: 14px; color: #374151;">${rupee(parsed.total)}</td>
+                  <td style="padding: 12px;">
+                    <select 
+                      class="status-select"
+                      data-order-id="${order.__backendId}"
+                      style="background: ${statusColors[status].bg}; color: ${statusColors[status].text}; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; border: none; cursor: pointer;"
+                      onchange="window.updateOrderStatus('${order.__backendId}', this.value)"
+                    >
+                      <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending</option>
+                      <option value="processing" ${status === 'processing' ? 'selected' : ''}>Processing</option>
+                      <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+                      <option value="cancelled" ${status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                    </select>
+                  </td>
+                  <td style="padding: 12px; font-size: 12px; color: #6b7280;">${new Date(order.timestamp).toLocaleString()}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    
+    function renderAdminActivities(activities) {
+      const container = document.getElementById('activitiesList');
+      
+      if (activities.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 32px; color: #6b7280; font-size: 16px;">No activities found</p>`;
+        return;
+      }
+      
+      const actionEmojis = {
+        login: '🔐',
+        logout: '🚪',
+        add_to_cart: '🛒',
+        remove_from_cart: '➖',
+        checkout: '💳',
+        order_placed: '✅'
+      };
+      
+      const actionLabels = {
+        login: 'User Login',
+        logout: 'User Logout',
+        add_to_cart: 'Added to Cart',
+        remove_from_cart: 'Removed from Cart',
+        checkout: 'Checkout Started',
+        order_placed: 'Order Placed'
+      };
+      
+      const sortedActivities = [...activities].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 50);
+      
+      container.innerHTML = sortedActivities.map(activity => {
+        const parsed = JSON.parse(activity.data);
+        const action = parsed.action || 'unknown';
+        
+        return `
+          <div class="activity-item flex items-start gap-4 p-4" style="background: #f9fafb; border-radius: 8px;">
+            <div style="font-size: 32px;">${actionEmojis[action] || '📝'}</div>
+            <div class="flex-1">
+              <div class="flex items-center mb-1" style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span style="font-weight: 600; color: #1f2937; font-size: 16px;">${actionLabels[action] || action}</span>
+                <span style="color: #6b7280;">•</span>
+                <span style="font-size: 14px; color: #6b7280;">${activity.user_email}</span>
+              </div>
+              <p style="font-size: 12px; color: #6b7280;">${new Date(activity.timestamp).toLocaleString()}</p>
+              ${parsed.medicine ? `<p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Medicine: ${parsed.medicine}</p>` : ''}
+              ${parsed.total ? `<p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Total: ${rupee(parsed.total)}</p>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function renderUsersOverview() {
+      const container = document.getElementById('usersContent');
+      
+      const userActivities = {};
+      
+      allData.forEach(item => {
+        if (item.user_email && item.user_email !== 'admin@pharmacy.com') {
+          if (!userActivities[item.user_email]) {
+            userActivities[item.user_email] = {
+              email: item.user_email,
+              totalOrders: 0,
+              totalSpent: 0,
+              lastActivity: null,
+              activityCount: 0
+            };
+          }
+          
+          if (item.type === 'order') {
+            const parsed = JSON.parse(item.data);
+            userActivities[item.user_email].totalOrders++;
+            userActivities[item.user_email].totalSpent += parsed.total || 0;
+          }
+          
+          if (item.type === 'activity') {
+            userActivities[item.user_email].activityCount++;
+          }
+          
+          const itemDate = new Date(item.timestamp);
+          if (!userActivities[item.user_email].lastActivity || itemDate > new Date(userActivities[item.user_email].lastActivity)) {
+            userActivities[item.user_email].lastActivity = item.timestamp;
+          }
+        }
+      });
+      
+      const users = Object.values(userActivities);
+      
+      if (users.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 32px; color: #6b7280; font-size: 16px;">No users yet</p>`;
+        return;
+      }
+      
+      users.sort((a, b) => b.totalSpent - a.totalSpent);
+      
+      container.innerHTML = `
+        <div class="overflow-x-auto">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid #e5e7eb;">
+                <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">User Email</th>
+                <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Total Orders</th>
+                <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Total Spent</th>
+                <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Activities</th>
+                <th style="text-align: left; padding: 12px; font-size: 14px; font-weight: 600; color: #374151;">Last Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.map(user => `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <td style="padding: 12px; font-size: 14px; color: #374151;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 20px;">👤</span>
+                      <span style="font-weight: 500;">${user.email}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px; font-size: 14px; color: #374151;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span style="font-size: 16px;">📦</span>
+                      <span style="font-weight: 600;">${user.totalOrders}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px; font-size: 14px; color: #374151;">
+                    <span style="font-weight: 600; color: #10b981;">${rupee(user.totalSpent)}</span>
+                  </td>
+                  <td style="padding: 12px; font-size: 14px; color: #374151;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span style="font-size: 16px;">🔔</span>
+                      <span>${user.activityCount} actions</span>
+                    </div>
+                  </td>
+                  <td style="padding: 12px; font-size: 12px; color: #6b7280;">
+                    ${user.lastActivity ? new Date(user.lastActivity).toLocaleString() : 'N/A'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    window.updateOrderStatus = function(orderId, newStatus) {
+      const order = allData.find(item => item.__backendId === orderId);
+      if (!order) return;
+      
+      const parsed = JSON.parse(order.data);
+      parsed.status = newStatus;
+      
+      const result = storage.update({
+        ...order,
+        data: JSON.stringify(parsed)
+      });
+      
+      if (result.isOk) {
+        renderAdminDashboardData();
+      }
+    };
+
+    function renderInventory() {
+      const container = document.getElementById('inventoryContent');
+      const addBtn = document.getElementById('addMedicineBtn');
+      
+      if (addBtn && !addBtn.hasAttribute('data-listener')) {
+        addBtn.setAttribute('data-listener', 'true');
+        addBtn.addEventListener('click', showAddMedicineModal);
+      }
+      
+      if (medicines.length === 0) {
+        container.innerHTML = `<p style="text-align: center; padding: 32px; color: #6b7280; font-size: 16px;">No medicines in inventory</p>`;
+        return;
+      }
+      
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          ${medicines.map(medicine => `
+            <div class="medicine-card p-6 rounded-xl shadow-md" style="background: #ffffff; position: relative;">
+              <div class="medicine-image">
+                <img src="${medicine.image}" alt="${medicine.name}" onerror="this.parentElement.innerHTML='<div style=\\'font-size: 64px;\\'>💊</div>';">
+              </div>
+              
+              <h3 style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">${medicine.name}</h3>
+              <p style="font-size: 14px; color: #1e293b; opacity: 0.7; margin-bottom: 12px;">By ${medicine.manufacturer}</p>
+              
+              <div class="space-y-4 mb-4" style="font-size: 14px; color: #1e293b;">
+                <div class="flex justify-between">
+                  <span style="opacity: 0.7;">Category:</span>
+                  <span style="font-weight: 500;">${medicine.category}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span style="opacity: 0.7;">Mfg Date:</span>
+                  <span style="font-weight: 500;">${medicine.mfgDate}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span style="opacity: 0.7;">Exp Date:</span>
+                  <span style="font-weight: 500;">${medicine.expDate}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span style="opacity: 0.7;">Price:</span>
+                  <span style="font-weight: 700; color: #3b82f6; font-size: 16px;">${rupee(medicine.price)}</span>
+                </div>
+              </div>
+              
+              <button 
+                onclick="window.removeMedicine('${medicine.id}')"
+                class="btn-primary"
+                style="width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #ef4444; color: #ffffff;"
+              >
+                🗑️ Remove Medicine
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function showAddMedicineModal() {
+      const modal = document.createElement('div');
+      modal.id = 'addMedicineModal';
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+      
+      modal.innerHTML = `
+        <div class="w-full max-w-md p-8 rounded-2xl" style="background: #ffffff; max-height: 90%; overflow-y: auto;">
+          <h3 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 24px;">Add New Medicine</h3>
+          
+          <form id="addMedicineForm" class="space-y-4">
+            <div>
+              <label for="medicineName" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Medicine Name</label>
+              <input 
+                type="text" 
+                id="medicineName" 
+                required 
+                placeholder="e.g., Aspirin 100mg"
+                style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+              />
+            </div>
+            
+            <div>
+              <label for="medicineManufacturer" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Manufacturer</label>
+              <input 
+                type="text" 
+                id="medicineManufacturer" 
+                required 
+                placeholder="e.g., PharmaCorp"
+                style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+              />
+            </div>
+            
+            <div>
+              <label for="medicineCategory" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Category</label>
+              <select 
+                id="medicineCategory" 
+                required
+                style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff; cursor: pointer;"
+              >
+                <option value="">Select category</option>
+                <option value="pain-relief">Pain Relief</option>
+                <option value="antibiotics">Antibiotics</option>
+                <option value="allergy">Allergy</option>
+                <option value="chronic">Chronic Disease</option>
+                <option value="vitamins">Vitamins & Supplements</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            
+            <div class="flex gap-4" style="display: flex; gap: 16px;">
+              <div class="flex-1">
+                <label for="medicineMfgDate" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Mfg Date</label>
+                <input 
+                  type="date" 
+                  id="medicineMfgDate" 
+                  required
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                />
+              </div>
+              
+              <div class="flex-1">
+                <label for="medicineExpDate" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Exp Date</label>
+                <input 
+                  type="date" 
+                  id="medicineExpDate" 
+                  required
+                  style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label for="medicinePrice" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Price (Rs.)</label>
+              <input 
+                type="number" 
+                id="medicinePrice" 
+                required 
+                min="1"
+                step="0.01"
+                placeholder="e.g., 99.00"
+                style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+              />
+            </div>
+            
+            <div>
+              <label for="medicineImage" style="display: block; font-size: 14px; font-weight: 500; color: #1e293b; margin-bottom: 8px;">Image URL</label>
+              <input 
+                type="url" 
+                id="medicineImage" 
+                required 
+                placeholder="https://example.com/image.jpg"
+                style="width: 100%; padding: 12px 16px; border: 2px solid #64748b; border-radius: 8px; font-size: 16px; color: #1e293b; background: #ffffff;"
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              class="btn-primary"
+              style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 24px; background: #10b981; color: #ffffff;"
+            >
+              Add Medicine
+            </button>
+            
+            <button 
+              type="button" 
+              id="cancelAddMedicine"
+              style="width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 12px; background: #64748b; color: #ffffff;"
+            >
+              Cancel
+            </button>
+          </form>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      document.getElementById('addMedicineForm').addEventListener('submit', handleAddMedicine);
+      document.getElementById('cancelAddMedicine').addEventListener('click', () => {
+        document.body.removeChild(modal);
+      });
+      
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
+    }
+
+    async function handleAddMedicine(e) {
+      e.preventDefault();
+      
+      const newMedicine = {
+        id: `${Date.now()}_${Math.random()}`,
+        name: document.getElementById('medicineName').value,
+        manufacturer: document.getElementById('medicineManufacturer').value,
+        category: document.getElementById('medicineCategory').value,
+        mfgDate: document.getElementById('medicineMfgDate').value,
+        expDate: document.getElementById('medicineExpDate').value,
+        price: parseFloat(document.getElementById('medicinePrice').value),
+        image: document.getElementById('medicineImage').value
+      };
+      
+      medicines.push(newMedicine);
+      
+      storage.create({
+        id: `activity_${Date.now()}_${Math.random()}`,
+        type: 'activity',
+        user_email: currentUser.email,
+        data: JSON.stringify({ action: 'add_medicine', medicine: newMedicine.name }),
+        timestamp: new Date().toISOString()
+      });
+      
+      const modal = document.getElementById('addMedicineModal');
+      if (modal) document.body.removeChild(modal);
+      
+      showToast('Medicine added successfully!');
+      renderInventory();
+    }
+
+    window.removeMedicine = function(medicineId) {
+      const medicineIndex = medicines.findIndex(m => m.id === medicineId);
+      if (medicineIndex === -1) return;
+      
+      const medicine = medicines[medicineIndex];
+      
+      const confirmModal = document.createElement('div');
+      confirmModal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+      
+      confirmModal.innerHTML = `
+        <div class="w-full max-w-md p-8 rounded-2xl" style="background: #ffffff;">
+          <h3 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 16px;">Confirm Removal</h3>
+          <p style="font-size: 16px; color: #1e293b; margin-bottom: 24px;">Are you sure you want to remove <strong>${medicine.name}</strong> from inventory?</p>
+          
+          <div style="display: flex; gap: 12px;">
+            <button 
+              id="confirmRemove"
+              class="btn-primary flex-1"
+              style="padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #ef4444; color: #ffffff;"
+            >
+              Yes, Remove
+            </button>
+            <button 
+              id="cancelRemove"
+              class="flex-1"
+              style="padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; background: #64748b; color: #ffffff;"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(confirmModal);
+      
+      document.getElementById('confirmRemove').addEventListener('click', () => {
+        medicines.splice(medicineIndex, 1);
+        
+        storage.create({
+          id: `activity_${Date.now()}_${Math.random()}`,
+          type: 'activity',
+          user_email: currentUser.email,
+          data: JSON.stringify({ action: 'remove_medicine', medicine: medicine.name }),
+          timestamp: new Date().toISOString()
+        });
+        
+        document.body.removeChild(confirmModal);
+        showToast('Medicine removed successfully!');
+        renderInventory();
+      });
+      
+      document.getElementById('cancelRemove').addEventListener('click', () => {
+        document.body.removeChild(confirmModal);
+      });
+      
+      confirmModal.addEventListener('click', (e) => {
+        if (e.target === confirmModal) {
+          document.body.removeChild(confirmModal);
+        }
+      });
+    };
+
+    initApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9abcd5d8545b6eef',t:'MTc2NTM3MDY4NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
